@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useStore } from "../store";
+import { bootstrapAuth, useStore } from "../store";
 import { Gate } from "./Gate";
 import { Sidebar } from "./Sidebar";
 import { MessageList } from "./MessageList";
@@ -10,10 +10,16 @@ export function ChatApp() {
   // the client. This keeps server and first client render identical (both null), so
   // there's no hydration mismatch, then we populate from storage after mount.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    void bootstrapAuth(); // decide entry: skip gate if no password, else verify stored one
+  }, []);
   const authed = useStore((s) => s.authed);
+  const authChecked = useStore((s) => s.authChecked);
 
-  if (!mounted) return null;
+  // Hold until the server tells us whether/which password is needed — avoids
+  // flashing the gate at a returning user with a valid stored password.
+  if (!mounted || !authChecked) return null;
   if (!authed) return <Gate />;
 
   return (

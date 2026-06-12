@@ -41,6 +41,7 @@ export interface State {
   currentId: string | null;
   password: string | null;
   authed: boolean;
+  authChecked: boolean; // has bootstrapAuth resolved entry yet? (gate decision)
 }
 
 const INDEX_KEY = "j1m:index";
@@ -53,6 +54,7 @@ let state: State = {
   currentId: null,
   password: null,
   authed: false,
+  authChecked: false,
 };
 
 const listeners = new Set<() => void>();
@@ -127,7 +129,10 @@ function ensureInit() {
     order,
     currentId: order[0] ?? null,
     password,
-    authed: Boolean(password),
+    // A stored password no longer grants entry on its own — bootstrapAuth() must
+    // re-verify it against the server first, so a stale/forged value can't get in.
+    authed: false,
+    authChecked: false,
   };
 
   if (!state.currentId) createSession();
@@ -136,14 +141,57 @@ function ensureInit() {
 
 // ---- actions ---------------------------------------------------------------
 
-export function setPassword(password: string) {
+// Ask the server whether a password is correct (or not required at all). The same
+// secret check guards /api/chat — this is just so we can decide entry up front.
+async function verifyPassword(password: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+    });
+    return res.ok;
+  } catch {
+    return false; // network error — treat as not authed, show the gate
+  }
+}
+
+// Decide entry on load: skip the gate when no password is required, otherwise only
+// enter if a previously-stored password still verifies. Called once on mount.
+export async function bootstrapAuth(): Promise<void> {
+  ensureInit();
+
+  let required = true;
+  try {
+    const res = await fetch("/api/auth");
+    if (res.ok) required = Boolean(((await res.json()) as { required?: boolean }).required);
+  } catch {
+    // network error — be conservative and show the gate
+  }
+
+  if (!required) {
+    setState({ ...state, authed: true, authChecked: true });
+    return;
+  }
+
+  const stored = state.password;
+  const ok = stored != null && (await verifyPassword(stored));
+  if (!ok && typeof window !== "undefined") localStorage.removeItem(AUTH_KEY);
+  setState({ ...state, password: ok ? stored : null, authed: ok, authChecked: true });
+}
+
+// Gate submit: enter ONLY if the server confirms the password.
+export async function submitPassword(password: string): Promise<boolean> {
+  const ok = await verifyPassword(password);
+  if (!ok) return false;
   if (typeof window !== "undefined") localStorage.setItem(AUTH_KEY, password);
-  setState({ ...state, password, authed: true }, true);
+  setState({ ...state, password, authed: true, authChecked: true }, true);
+  return true;
 }
 
 export function clearAuth() {
   if (typeof window !== "undefined") localStorage.removeItem(AUTH_KEY);
-  setState({ ...state, password: null, authed: false }, true);
+  setState({ ...state, password: null, authed: false, authChecked: true }, true);
 }
 
 export function createSession(): string {
