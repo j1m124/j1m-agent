@@ -17,6 +17,7 @@ export interface TraceStep {
   tool: string;
   args?: unknown;
   ok?: boolean | null; // null = running, true/false = finished
+  output?: string; // tool stdout / error text (client tools only, e.g. run_script)
 }
 
 export interface UIMessage {
@@ -257,7 +258,7 @@ function applyEvent(id: string, ev: SSEEvent) {
         for (let i = trace.length - 1; i >= 0; i--) {
           const step = trace[i];
           if (step && step.tool === ev.tool && (step.ok === null || step.ok === undefined)) {
-            trace[i] = { ...step, ok: ev.ok };
+            trace[i] = { ...step, ok: ev.ok, output: ev.output };
             break;
           }
         }

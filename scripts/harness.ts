@@ -27,13 +27,20 @@ function makeRenderer() {
     switch (ev.type) {
       case "step": {
         const a = ev.args as any;
-        const detail = a?.query ? `"${a.query}"` : a?.url ?? JSON.stringify(a);
+        const detail = a?.query
+          ? `"${a.query}"`
+          : a?.url ?? (typeof a?.code === "string" ? a.code.replace(/\s+/g, " ").trim().slice(0, 80) : JSON.stringify(a));
         process.stdout.write(`\n${cyan("▸ " + ev.tool)} ${dim(detail)}\n`);
         break;
       }
-      case "tool_result":
+      case "tool_result": {
         process.stdout.write(`  ${ev.ok ? green("✓") : red("✗")} ${dim(ev.ok ? "ok" : "failed")}\n`);
+        if (ev.output) {
+          const indented = ev.output.replace(/\n/g, "\n    ");
+          process.stdout.write(`    ${dim(indented)}\n`);
+        }
         break;
+      }
       case "token":
         if (!answerStarted) {
           process.stdout.write(`\n${bold("── answer ──")}\n`);

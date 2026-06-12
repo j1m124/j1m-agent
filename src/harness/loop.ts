@@ -13,6 +13,28 @@ import { SERVER_TOOLS, USER_TOOLS, runTool } from "./tools";
 
 export const MAX_STEPS = 6;
 
+// Generic backstop on every user-tool call, so a wedged tool can't hang the whole
+// request. Note: run_script self-limits inside QuickJS (a ~1s interrupt deadline) and
+// runs synchronously, so this outer timer effectively never fires for it — it exists to
+// bound any *future* async user tool. The losing race branch is abandoned, not cancelled.
+const TOOL_TIMEOUT_MS = 10_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 export async function runAgent(
   messages: ChatMessage[],
   emit: Emit,
@@ -73,12 +95,13 @@ export async function runAgent(
         }
         emit({ type: "step", tool: tc.function.name, args });
         try {
-          const out = await runTool(tc);
-          emit({ type: "tool_result", tool: tc.function.name, ok: true });
+          const out = await withTimeout(runTool(tc), TOOL_TIMEOUT_MS, tc.function.name);
+          emit({ type: "tool_result", tool: tc.function.name, ok: true, output: out });
           return { role: "tool", tool_call_id: tc.id, content: out };
         } catch (e: any) {
-          emit({ type: "tool_result", tool: tc.function.name, ok: false });
-          return { role: "tool", tool_call_id: tc.id, content: `ERROR: ${e?.message ?? String(e)}` };
+          const message = `ERROR: ${e?.message ?? String(e)}`;
+          emit({ type: "tool_result", tool: tc.function.name, ok: false, output: message });
+          return { role: "tool", tool_call_id: tc.id, content: message };
         }
       })
     );

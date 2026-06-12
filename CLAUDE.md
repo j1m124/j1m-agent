@@ -49,9 +49,24 @@ wire format in `src/client/stream.ts`.
   `url_citation` **annotations**, accumulated in `openrouter.ts` and harvested into the
   `sources` list in `loop.ts`. Consequence: the live trace shows no per-search steps for
   these (they're opaque mid-stream); sources appear only at the end.
-- `USER_TOOLS` (currently empty): executed by *this* client inside the loop via `runTool`.
-  When the model calls one, OpenRouter hands it back to us. `run_script` is the intended
-  seam here and is deliberately deferred — leave it unless asked.
+- `USER_TOOLS` (currently just `run_script`): executed by *this* client inside the loop
+  via `runTool`. When the model calls one, OpenRouter hands the tool_call back to us; we
+  run it and append the result as a `role:"tool"` message, then loop. This is the seam
+  where the hand-rolled loop still does real work (server tools never reach `runTool`).
+
+**`run_script`** (`src/harness/runScript.ts`): a pure-computation JS sandbox for the model
+— exact arithmetic, date math, parsing/reshaping data. The model writes a snippet, we run
+it inside a **QuickJS interpreter compiled to WASM** (`quickjs-emscripten`), and feed back
+whatever it `console.log`'d (or its final value if nothing was logged). The sandbox is a
+*separate VM* with **no host bindings** — no `fetch`, no filesystem, no `process` — so the
+safety model is severed-by-construction, not lock-it-down-by-hand; it can't retrieve
+anything (that's what the server tools are for). Each call gets a fresh runtime+context
+(stateless), bounded by a ~1s interrupt deadline and a 32MB memory cap; errors/timeouts
+come back as `ERROR: …` data, not throws. Runs in-process under both Bun and Node (Vite
+dev), so it needs no extra config or env vars. (It originally targeted a deployed
+Cloudflare Worker, but the `unsafe_eval` binding that needed is local-dev-only — QuickJS
+in-process is a stronger sandbox anyway.) Tool output is surfaced in the trace via the
+`output` field on the `tool_result` event.
 
 **OpenRouter client** (`src/harness/openrouter.ts`): hand-rolled streaming SSE parser that
 reassembles `content`, `tool_calls` (by `index`), and annotations into one assistant

@@ -25,9 +25,11 @@ Tools available to you:
 - web_search: search the web for current information.
 - web_fetch: retrieve the full readable content of a specific URL.
 - datetime: get the current date/time (the date above is usually enough; use this only when you need a precise time or a specific timezone).
+- run_script: run a short JavaScript snippet in a sandbox and read back what it console.log()s. Use it for exact computation — arithmetic on figures you've gathered, date math, parsing or reshaping data, unit conversions, verifying a calculation — rather than doing the math in your head. It has NO network or file access and cannot look anything up (use web_search/web_fetch for that); standard JS built-ins only, no imports or async.
 
 How to work:
 - For anything that may have changed since your training, search the web and read the most relevant sources rather than relying on memory.
+- When a step needs an exact number or careful data manipulation, use run_script instead of computing in your head; console.log the result so you can read it back.
 - Ground your answer in what you found and cite the sources you used.
 - Be accurate and concise. If sources conflict or you could not verify something, say so plainly rather than guessing.`;
 }

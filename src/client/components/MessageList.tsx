@@ -73,25 +73,32 @@ function Message({
 }
 
 // Live tool trace. Note: web_search/web_fetch run server-side (OpenRouter), so they
-// don't surface here — this lights up for client-side tools (e.g. a future run_script).
+// don't surface here — this lights up for client-side tools like run_script.
 function Trace({ steps }: { steps: TraceStep[] }) {
   return (
-    <div className="space-y-1 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/50">
+    <div className="space-y-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/50">
       {steps.map((s, i) => (
-        <div key={i} className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
-          <span
-            className={
-              s.ok === null || s.ok === undefined
-                ? "animate-pulse text-amber-500"
-                : s.ok
-                  ? "text-emerald-500"
-                  : "text-red-500"
-            }
-          >
-            {s.ok === null || s.ok === undefined ? "▸" : s.ok ? "✓" : "✗"}
-          </span>
-          <span className="font-mono">{s.tool}</span>
-          <span className="truncate text-neutral-400 dark:text-neutral-500">{describeArgs(s.args)}</span>
+        <div key={i}>
+          <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+            <span
+              className={
+                s.ok === null || s.ok === undefined
+                  ? "animate-pulse text-amber-500"
+                  : s.ok
+                    ? "text-emerald-500"
+                    : "text-red-500"
+              }
+            >
+              {s.ok === null || s.ok === undefined ? "▸" : s.ok ? "✓" : "✗"}
+            </span>
+            <span className="font-mono">{s.tool}</span>
+            <span className="truncate text-neutral-400 dark:text-neutral-500">{describeArgs(s.args)}</span>
+          </div>
+          {s.output && (
+            <pre className="mt-1 ml-6 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-neutral-100 p-2 font-mono text-[11px] text-neutral-600 dark:bg-neutral-800/60 dark:text-neutral-300">
+              {s.output}
+            </pre>
+          )}
         </div>
       ))}
     </div>
@@ -138,6 +145,7 @@ function describeArgs(args: unknown): string {
     const a = args as Record<string, unknown>;
     if (typeof a.query === "string") return `"${a.query}"`;
     if (typeof a.url === "string") return a.url;
+    if (typeof a.code === "string") return a.code.replace(/\s+/g, " ").trim().slice(0, 80);
   }
   return "";
 }

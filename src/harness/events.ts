@@ -7,7 +7,7 @@ import type { Source } from "./types";
 
 export type SSEEvent =
   | { type: "step"; tool: string; args: unknown } // a tool call is starting
-  | { type: "tool_result"; tool: string; ok: boolean } // a tool call finished
+  | { type: "tool_result"; tool: string; ok: boolean; output?: string } // a tool call finished (output = stdout / error text, for client tools)
   | { type: "token"; text: string } // a chunk of the final answer
   | { type: "sources"; sources: Source[] } // ordered citation list
   | { type: "done" } // loop finished
