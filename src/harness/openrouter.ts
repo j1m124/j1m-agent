@@ -12,9 +12,9 @@
 // (we can't cleanly re-stream once tokens have been emitted to the caller).
 
 import type { Annotation, ChatMessage, ToolCall } from "./types";
+import { DEFAULT_MODEL } from "./models";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4.6";
 const MAX_ATTEMPTS = 3;
 
 class OpenRouterError extends Error {
@@ -29,6 +29,7 @@ class OpenRouterError extends Error {
 export interface StreamOptions {
   messages: ChatMessage[];
   tools?: unknown[]; // omit (e.g. on the last step) to force a text answer
+  model?: string; // overrides the built-in default
   onToken?: (text: string) => void; // fires for each content delta
   signal?: AbortSignal; // abort the request (e.g. client disconnected)
 }
@@ -65,7 +66,8 @@ export async function streamCompletion(opts: StreamOptions): Promise<ChatMessage
 async function streamOnce(opts: StreamOptions): Promise<ChatMessage> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set");
-  const model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
+  // Caller's choice (the client selector) wins; otherwise the built-in default.
+  const model = opts.model || DEFAULT_MODEL;
 
   const res = await fetch(ENDPOINT, {
     method: "POST",

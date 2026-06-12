@@ -39,6 +39,7 @@ export async function runAgent(
   messages: ChatMessage[],
   emit: Emit,
   signal?: AbortSignal,
+  model?: string,
 ): Promise<void> {
   const sources: Source[] = []; // ordered citation list, built from url_citation annotations
 
@@ -55,6 +56,7 @@ export async function runAgent(
       assistant = await streamCompletion({
         messages,
         tools,
+        model,
         onToken: (text) => emit({ type: "token", text }),
         signal,
       });

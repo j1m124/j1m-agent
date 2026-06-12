@@ -1,6 +1,45 @@
 @import "tailwindcss";
+/* KaTeX styles for LaTeX math rendered in chat answers (rehype-katex). */
+@import "katex/dist/katex.min.css";
 @plugin "@tailwindcss/typography";
 
 /* Switch `dark:` from the default prefers-color-scheme to a manual `.dark` class on
    <html>, so the toggle button controls it. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Drive native UI (scrollbars, form controls) off the manual theme class. Without
+   this the browser keeps painting light scrollbars in dark mode — color-scheme is
+   what tells it to render the dark variant, for both the main scroll area and the
+   textarea. Mirrors the `.dark` class, not prefers-color-scheme. */
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* The mobile sidebar is an off-canvas drawer parked at translateX(-100%); a fixed
+   element extending past the viewport adds horizontal scroll ("jiggle"). The app is a
+   full-height layout that scrolls internally and never needs the document to scroll
+   sideways, so clip horizontal overflow at the viewport. */
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* Render LaTeX larger than the surrounding prose-sm body text — KaTeX sizes math
+   relative to its context, so without this the math reads small. Defined after the
+   KaTeX import so it overrides KaTeX's default 1.21em. */
+.katex {
+  font-size: 1.3em;
+}
+.katex-display > .katex {
+  font-size: 1.6em;
+}
+/* A genuinely wide display equation should scroll inside its own box, not push the page
+   wider (which the viewport clip would otherwise just cut off). */
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

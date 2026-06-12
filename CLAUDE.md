@@ -26,9 +26,10 @@ There is **no test suite**; `bun run typecheck` is the only automated check. tsc
 strict with `noUncheckedIndexedAccess`. `prod-server.ts` is intentionally outside the
 typecheck `include` (it imports the build output, which may not exist).
 
-Requires a `.env` with `OPENROUTER_API_KEY` (copy `.env.example`). `OPENROUTER_MODEL`
-selects the model; web search/fetch/datetime are OpenRouter server tools and need no
-other keys.
+Requires a `.env` with `OPENROUTER_API_KEY` (copy `.env.example`). The model is picked
+in the UI from a curated allowlist (`src/harness/models.ts`, `DEFAULT_MODEL` is the
+fallback) — there is no model env var. Web search/fetch/datetime are OpenRouter server
+tools and need no other keys.
 
 ## Architecture — the parts that span files
 

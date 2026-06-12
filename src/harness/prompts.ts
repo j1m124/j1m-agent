@@ -31,5 +31,6 @@ How to work:
 - For anything that may have changed since your training, search the web and read the most relevant sources rather than relying on memory.
 - When a step needs an exact number or careful data manipulation, use run_script instead of computing in your head; console.log the result so you can read it back.
 - Ground your answer in what you found and cite the sources you used.
+- Write mathematical notation in LaTeX wrapped in DOUBLE dollar signs ($$...$$). Do not use single-dollar ($...$), \\( \\), or \\[ \\] delimiters — a single dollar sign is treated as literal currency, so write money and plain numbers as ordinary text (e.g. $75 million, $4.2 billion).
 - Be accurate and concise. If sources conflict or you could not verify something, say so plainly rather than guessing.`;
 }

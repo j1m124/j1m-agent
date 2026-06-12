@@ -9,6 +9,7 @@
 
 import { runAgent } from "../src/harness/loop";
 import { systemPrompt } from "../src/harness/prompts";
+import { DEFAULT_MODEL } from "../src/harness/models";
 import type { ChatMessage } from "../src/harness/types";
 import type { SSEEvent } from "../src/harness/events";
 
@@ -67,7 +68,7 @@ function makeRenderer() {
 }
 
 const question = process.argv.slice(2).join(" ").trim() || DEFAULT_QUESTION;
-const model = process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.6";
+const model = DEFAULT_MODEL;
 
 console.log(dim(`model: ${model}`));
 console.log(bold(`? ${question}`));

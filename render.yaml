@@ -27,5 +27,3 @@ services:
         sync: false
       - key: APP_PASSWORD
         sync: false
-      - key: OPENROUTER_MODEL
-        value: google/gemma-4-31b-it:free

@@ -14,3 +14,8 @@ export type SSEEvent =
   | { type: "error"; message: string }; // fatal error (e.g. model call failed)
 
 export type Emit = (event: SSEEvent) => void;
+
+// What the user sees when something fails. The original error (OpenRouter status/body,
+// stack traces, etc.) is logged server-side instead of streamed to the browser, so we
+// don't leak internals — see the sanitizing emit in routes/api/chat.ts.
+export const GENERIC_ERROR_MESSAGE = "Something went wrong while generating a response. Please try again.";

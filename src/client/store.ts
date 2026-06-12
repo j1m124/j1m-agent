@@ -10,7 +10,8 @@
 import { useSyncExternalStore } from "react";
 import type { Source } from "../harness/types";
 import type { ChatMessage } from "../harness/types";
-import type { SSEEvent } from "../harness/events";
+import { GENERIC_ERROR_MESSAGE, type SSEEvent } from "../harness/events";
+import { DEFAULT_MODEL, isAllowedModel } from "../harness/models";
 import { HttpError, streamChat } from "./stream";
 
 export interface TraceStep {
@@ -34,6 +35,7 @@ export interface Session {
   messages: UIMessage[];
   status: "idle" | "generating";
   updatedAt: number;
+  ephemeral?: boolean; // incognito chat: never persisted, never listed in the sidebar
 }
 
 export interface State {
@@ -43,10 +45,16 @@ export interface State {
   password: string | null;
   authed: boolean;
   authChecked: boolean; // has bootstrapAuth resolved entry yet? (gate decision)
+  model: string; // selected OpenRouter model (global preference)
+  // Incognito ("temporary") chat: a single in-memory session that is never written to
+  // localStorage and never listed in the sidebar. null id = not in incognito mode.
+  incognitoId: string | null;
+  incognitoReturnId: string | null; // session to restore when leaving incognito
 }
 
 const INDEX_KEY = "j1m:index";
 const AUTH_KEY = "j1m:auth";
+const MODEL_KEY = "j1m:model";
 const chatKey = (id: string) => `j1m:chat:${id}`;
 
 let state: State = {
@@ -56,6 +64,9 @@ let state: State = {
   password: null,
   authed: false,
   authChecked: false,
+  model: DEFAULT_MODEL,
+  incognitoId: null,
+  incognitoReturnId: null,
 };
 
 const listeners = new Set<() => void>();
@@ -86,14 +97,14 @@ function persist() {
   const index = state.order
     .map((id) => {
       const s = state.sessions[id];
-      return s ? { id, title: s.title, updatedAt: s.updatedAt } : null;
+      return s && !s.ephemeral ? { id, title: s.title, updatedAt: s.updatedAt } : null;
     })
     .filter(Boolean);
   try {
     localStorage.setItem(INDEX_KEY, JSON.stringify(index));
     for (const id of state.order) {
       const s = state.sessions[id];
-      if (s) localStorage.setItem(chatKey(id), JSON.stringify({ ...s, status: "idle" }));
+      if (s && !s.ephemeral) localStorage.setItem(chatKey(id), JSON.stringify({ ...s, status: "idle" }));
     }
   } catch {
     // storage full / unavailable — ignore
@@ -106,6 +117,8 @@ function ensureInit() {
   initialized = true;
 
   const password = localStorage.getItem(AUTH_KEY);
+  const storedModel = localStorage.getItem(MODEL_KEY);
+  const model = isAllowedModel(storedModel) ? storedModel : DEFAULT_MODEL;
   const sessions: Record<string, Session> = {};
   let order: string[] = [];
   try {
@@ -134,6 +147,9 @@ function ensureInit() {
     // re-verify it against the server first, so a stale/forged value can't get in.
     authed: false,
     authChecked: false,
+    model,
+    incognitoId: null,
+    incognitoReturnId: null,
   };
 
   if (!state.currentId) createSession();
@@ -196,6 +212,7 @@ export function clearAuth() {
 }
 
 export function createSession(): string {
+  const base = dropIncognitoSession(state); // a new chat always leaves incognito
   const id = crypto.randomUUID();
   const session: Session = {
     id,
@@ -205,17 +222,65 @@ export function createSession(): string {
     updatedAt: Date.now(),
   };
   setState({
-    ...state,
-    sessions: { ...state.sessions, [id]: session },
-    order: [id, ...state.order],
+    ...base,
+    sessions: { ...base.sessions, [id]: session },
+    order: [id, ...base.order],
     currentId: id,
   });
   return id;
 }
 
 export function selectSession(id: string) {
-  if (!state.sessions[id]) return;
-  setState({ ...state, currentId: id });
+  if (!state.sessions[id] || id === state.incognitoId) return;
+  setState({ ...dropIncognitoSession(state), currentId: id });
+}
+
+// Tear down the in-memory incognito session (abort any in-flight stream, forget it) and
+// return the next state. currentId is left to the caller. No-op when not in incognito.
+function dropIncognitoSession(s: State): State {
+  if (!s.incognitoId) return s;
+  inFlight.get(s.incognitoId)?.abort();
+  inFlight.delete(s.incognitoId);
+  const { [s.incognitoId]: _gone, ...sessions } = s.sessions;
+  return { ...s, sessions, incognitoId: null, incognitoReturnId: null };
+}
+
+// Toggle the incognito ("temporary") chat. On: spin up a fresh in-memory session that is
+// never persisted or listed, remembering where to return. Off: discard it and go back to
+// the session we came from (or the newest one).
+export function toggleIncognito() {
+  if (state.incognitoId) {
+    const returnId = state.incognitoReturnId;
+    const base = dropIncognitoSession(state);
+    const currentId = returnId && base.sessions[returnId] ? returnId : (base.order[0] ?? null);
+    setState({ ...base, currentId }, true);
+    if (!currentId) createSession();
+    return;
+  }
+  const id = crypto.randomUUID();
+  const session: Session = {
+    id,
+    title: "Incognito",
+    messages: [],
+    status: "idle",
+    updatedAt: Date.now(),
+    ephemeral: true,
+  };
+  setState({
+    ...state,
+    sessions: { ...state.sessions, [id]: session },
+    incognitoId: id,
+    incognitoReturnId: state.currentId,
+    currentId: id,
+  });
+}
+
+// Global model preference. Persisted under its own key (not part of a session), so it
+// sticks across reloads and applies to the next message in every session.
+export function setModel(id: string) {
+  if (!isAllowedModel(id) || id === state.model) return;
+  if (typeof window !== "undefined") localStorage.setItem(MODEL_KEY, id);
+  setState({ ...state, model: id });
 }
 
 export function deleteSession(id: string) {
@@ -233,8 +298,11 @@ function patchSession(id: string, patch: (s: Session) => Session) {
   const s = state.sessions[id];
   if (!s) return;
   const updated = patch(s);
-  // bump to top of order on activity
-  const order = [id, ...state.order.filter((x) => x !== id)];
+  // Bump to top of order on activity — but only for listed sessions. An ephemeral
+  // incognito session stays out of `order` entirely, so it's never listed or persisted.
+  const order = state.order.includes(id)
+    ? [id, ...state.order.filter((x) => x !== id)]
+    : state.order;
   setState({ ...state, sessions: { ...state.sessions, [id]: updated }, order });
 }
 
@@ -311,6 +379,7 @@ export async function sendMessage(text: string) {
     await streamChat({
       messages: apiMessages,
       password: state.password ?? "",
+      model: state.model,
       signal: controller.signal,
       onEvent: (ev) => applyEvent(id, ev),
     });
@@ -319,7 +388,9 @@ export async function sendMessage(text: string) {
       applyEvent(id, { type: "error", message: "Unauthorized — check the password." });
       clearAuth();
     } else if (!controller.signal.aborted) {
-      applyEvent(id, { type: "error", message: e instanceof Error ? e.message : String(e) });
+      // Raw client-side failure (network/stream) → browser console; generic to the UI.
+      console.error("[chat] stream error:", e);
+      applyEvent(id, { type: "error", message: GENERIC_ERROR_MESSAGE });
     }
   } finally {
     inFlight.delete(id);

@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import "../../server/loadEnv"; // ensure OPENROUTER_API_KEY etc. are loaded in dev
 import { runAgent } from "../../harness/loop";
 import { systemPrompt } from "../../harness/prompts";
+import { isAllowedModel } from "../../harness/models";
 import type { ChatMessage } from "../../harness/types";
-import type { SSEEvent } from "../../harness/events";
+import { GENERIC_ERROR_MESSAGE, type SSEEvent } from "../../harness/events";
 
 // Milestone 3: the harness loop behind an SSE endpoint. The server is STATELESS —
 // each request carries the full conversation; we prepend the system prompt and stream
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        let body: { messages?: ChatMessage[]; password?: string };
+        let body: { messages?: ChatMessage[]; password?: string; model?: string };
         try {
           body = await request.json();
         } catch {
@@ -26,6 +27,11 @@ export const Route = createFileRoute("/api/chat")({
           return new Response("Unauthorized", { status: 401 });
         }
 
+        // Only honor a model that's on our curated allowlist; anything else falls back
+        // to the env/default inside the loop. Stops a crafted request from billing an
+        // arbitrary (expensive) model.
+        const model = isAllowedModel(body.model) ? body.model : undefined;
+
         const conversation = Array.isArray(body.messages) ? body.messages : [];
         const messages: ChatMessage[] = [
           { role: "system", content: systemPrompt() },
@@ -36,7 +42,7 @@ export const Route = createFileRoute("/api/chat")({
         const stream = new ReadableStream<Uint8Array>({
           start(controller) {
             let closed = false;
-            const emit = (ev: SSEEvent) => {
+            const send = (ev: SSEEvent) => {
               if (closed) return;
               try {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
@@ -44,8 +50,21 @@ export const Route = createFileRoute("/api/chat")({
                 closed = true; // controller already closed (client gone)
               }
             };
-            runAgent(messages, emit, request.signal)
-              .catch((e: any) => emit({ type: "error", message: e?.message ?? String(e) }))
+            // Sanitizing emit: keep the real error (OpenRouter status/body, etc.) on the
+            // server console; the browser only ever gets a generic message.
+            const emit = (ev: SSEEvent) => {
+              if (ev.type === "error") {
+                console.error("[api/chat] error:", ev.message);
+                send({ type: "error", message: GENERIC_ERROR_MESSAGE });
+                return;
+              }
+              send(ev);
+            };
+            runAgent(messages, emit, request.signal, model)
+              .catch((e: any) => {
+                console.error("[api/chat] uncaught:", e);
+                send({ type: "error", message: GENERIC_ERROR_MESSAGE });
+              })
               .finally(() => {
                 if (closed) return;
                 closed = true;

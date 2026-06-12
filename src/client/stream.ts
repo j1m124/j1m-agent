@@ -16,13 +16,14 @@ export class HttpError extends Error {
 export async function streamChat(opts: {
   messages: ChatMessage[];
   password: string;
+  model: string;
   signal?: AbortSignal;
   onEvent: (ev: SSEEvent) => void;
 }): Promise<void> {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: opts.messages, password: opts.password }),
+    body: JSON.stringify({ messages: opts.messages, password: opts.password, model: opts.model }),
     signal: opts.signal,
   });
 
