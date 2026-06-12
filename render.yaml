@@ -1,0 +1,26 @@
+# Render blueprint (https://render.com/docs/blueprint-spec). Deploying is your step:
+#   1. Push this repo to GitHub.
+#   2. In Render: New > Blueprint, point it at the repo.
+#   3. Set OPENROUTER_API_KEY and APP_PASSWORD (sync:false) in the dashboard.
+#   4. BEFORE going live: set a hard prepaid credit cap on your OpenRouter account.
+#
+# Native Bun runtime — no Docker. The free instance spins down after ~15 min idle
+# (~30-60s cold start) and has 512 MB / 0.1 CPU, which is fine for this I/O-bound app.
+# `start` runs the production build (prod-server.ts), never dev mode.
+#
+# Note: confirm `runtime: bun` against current Render docs; if it's unavailable,
+# create a Web Service manually with the same build/start commands below.
+services:
+  - type: web
+    name: j1m-agent
+    runtime: bun
+    plan: free
+    buildCommand: bun install && bun run build
+    startCommand: bun run start
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: google/gemma-4-31b-it:free

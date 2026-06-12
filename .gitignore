@@ -1,0 +1,12 @@
+node_modules
+.env
+dist
+.output
+.nitro
+.tanstack
+.vite
+.DS_Store
+*.log
+
+# TanStack Router generates this on dev/build
+src/routeTree.gen.ts

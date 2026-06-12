@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Switch `dark:` from the default prefers-color-scheme to a manual `.dark` class on
+   <html>, so the toggle button controls it. */
+@custom-variant dark (&:where(.dark, .dark *));
