@@ -23,7 +23,7 @@ export function Gate() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex min-h-screen items-center justify-center p-6 supports-[min-height:100dvh]:min-h-dvh">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4">
         <div>
           <h1 className="text-lg font-semibold">j1m-agent</h1>

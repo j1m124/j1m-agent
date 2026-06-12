@@ -28,7 +28,7 @@ export function ChatApp() {
   if (!authed) return <Gate />;
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen supports-[height:100dvh]:h-dvh">
       {/* Mobile-only backdrop; tapping it closes the drawer. */}
       {sidebarOpen && (
         <button
